@@ -1,0 +1,78 @@
+buildscript {
+  ext.versions = [
+      'kotlin': '1.3.21',
+  ]
+
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${versions.kotlin}"
+  }
+}
+
+apply plugin: 'org.jetbrains.kotlin.jvm'
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${versions.kotlin}"
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.1.1'
+  implementation 'com.squareup.okhttp3:okhttp:3.13.1'
+  implementation 'com.squareup.okhttp3:logging-interceptor:3.13.1'
+  implementation 'com.squareup.okio:okio:2.2.2'
+  implementation 'net.sf.kxml:kxml2:2.3.0'
+  implementation 'org.ow2.asm:asm:7.1'
+  implementation 'org.ow2.asm:asm-util:7.1'
+}
+
+compileKotlin {
+  kotlinOptions {
+    jvmTarget = '1.8'
+    freeCompilerArgs = [
+        '-XXLanguage:+InlineClasses'
+    ]
+  }
+}
+
+task fatJar(type: Jar, dependsOn: 'compileJava') {
+  from files(sourceSets.main.output.classesDirs)
+  from configurations.runtimeClasspath.asFileTree.files.collect { zipTree(it) }
+
+  classifier 'fat'
+
+  manifest {
+   attributes 'Main-Class': 'com.jakewharton.google.maven.Exploder'
+  }
+}
+
+def binaryFile = new File(buildDir, "libs/google-maven-exploder-binary.jar")
+task binaryJar() {
+  dependsOn(fatJar)
+
+  inputs.file(fatJar.archivePath)
+  outputs.file(binaryFile)
+
+  doLast {
+    def fatJarFile = fatJar.archivePath
+
+    binaryFile.getParentFile().mkdirs()
+    binaryFile.delete()
+    binaryFile << "#!/bin/sh\n\nexec java -jar \$0 \"\$@\"\n\n"
+    fatJarFile.withInputStream { binaryFile.append it }
+
+    binaryFile.setExecutable true, false
+  }
+}
+
+task copyBinary(type: Copy, dependsOn: binaryJar) {
+  from(binaryFile)
+  into buildDir
+  rename(".*", 'google-maven-exploder')
+}
+assemble.dependsOn(copyBinary)
