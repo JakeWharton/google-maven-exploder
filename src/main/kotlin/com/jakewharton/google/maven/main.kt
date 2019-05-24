@@ -50,7 +50,14 @@ suspend fun main() {
       }
       .flatten()
 
-  val versionedCoordinatesWithPackaging = versionedCoordinates
+  val (existing, missing) = versionedCoordinates.partition {
+    outputDir.resolve("${it.groupId}/${it.artifactId}/${it.version}").exists()
+  }
+  if (false) {
+    println("Skipping\n  ${existing.joinToString("\n  ")}")
+  }
+
+  val versionedCoordinatesWithPackaging = missing
       .mapStupidlyParallel {
         val pomXml = try {
           client.getString(it.pomUrl(baseUrl))
@@ -247,7 +254,9 @@ private fun parsePomPackaging(xml: String): String {
 private suspend fun <T> Collection<T>.forEachStupidlyParallel(
     coroutineContext: CoroutineContext = Dispatchers.IO,
     body: suspend (T) -> Unit
-) = mapStupidlyParallel(coroutineContext, body)
+) {
+  mapStupidlyParallel(coroutineContext, body)
+}
 
 private suspend fun <T, R> Collection<T>.mapStupidlyParallel(
   coroutineContext: CoroutineContext = Dispatchers.IO,
